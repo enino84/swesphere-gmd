@@ -1,0 +1,49 @@
+# One service per experiment. They write CSV row by row into ./results, so a
+# run that is interrupted leaves usable output and starting it again skips
+# the cases already on disk.
+#
+#   docker compose build
+#   docker compose run --rm smoke          # QUICK=1 end to end, minutes
+#   docker compose run -d exp04            # start the long one first
+#
+# exp01, exp02, exp03, exp04, exp06, exp07 and exp09 are independent.
+# exp05 reads what exp04 wrote. exp08 needs nothing but takes hours.
+
+x-common: &common
+  build: .
+  volumes:
+    - ./results:/work/results
+    - ./figures:/work/figures
+  environment:
+    OMP_NUM_THREADS: "1"
+    OPENBLAS_NUM_THREADS: "1"
+    MKL_NUM_THREADS: "1"
+    # The image copies experiments/ and figures/, not .git, so the container
+    # has no repository to ask which commit it is running. Export GIT_COMMIT
+    # on the host and every result records it; leave it unset and EXP-09
+    # reports "unknown" rather than guessing.
+    GIT_COMMIT: "${GIT_COMMIT:-}"
+
+services:
+  smoke:
+    <<: *common
+    environment:
+      QUICK: "1"
+      OMP_NUM_THREADS: "1"
+      RESULTS_DIR: /work/results/quick
+    command: bash -c "set -e; for e in experiments/exp0*.py; do echo \"== $$e\"; python $$e; done; echo ALL QUICK EXPERIMENTS PASSED"
+
+  exp01: { <<: *common, command: python experiments/exp01_convergence.py }
+  exp02: { <<: *common, command: python experiments/exp02_rossby_haurwitz.py }
+  exp03: { <<: *common, command: python experiments/exp03_galewsky.py }
+  exp04: { <<: *common, command: python experiments/exp04_regimes.py }
+  exp05: { <<: *common, command: python experiments/exp05_stationarity.py }
+  exp06: { <<: *common, command: python experiments/exp06_stability.py }
+  exp07: { <<: *common, command: python experiments/exp07_filter_protocol.py }
+  exp08: { <<: *common, command: python experiments/exp08_assimilation.py }
+  exp09: { <<: *common, command: python experiments/exp09_environment.py }
+  exp10: { <<: *common, command: python experiments/exp10_sponge_necessity.py }
+
+  figures:
+    <<: *common
+    command: python figures/make_figures.py

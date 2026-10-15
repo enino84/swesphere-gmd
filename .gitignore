@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+results/*.npy
+results/quick/
+figures/*.png
+figures/*.pdf
+figures/*.tex

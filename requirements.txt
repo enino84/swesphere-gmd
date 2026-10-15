@@ -1,0 +1,13 @@
+# The model and the assimilation library, both from PyPI.
+# 0.4.0 is the first release in which propagate gives the same answer however
+# a forecast window is split, which every cycled experiment here depends on.
+# 0.5.0 adds the rotated test case 2, test case 6, and the settable Coriolis
+# field the rotated case needs, so the experiments run released code rather
+# than a local copy of it.
+swesphere>=0.5.0
+pyteda[swe]>=0.6.0
+
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
