@@ -18,6 +18,7 @@ asked for the verification a model description paper is expected to carry.
 | `exp08_assimilation` | R2.4: a worked algorithm experiment | hours |
 | `exp09_environment` | R4-m4: what the cost figure means | seconds |
 | `exp10_sponge_necessity` | not asked for: is the polar sponge needed at all? | hours |
+| `exp11_gallery` | the model states behind every field figure | hours |
 
 R2 is reviewer 2, R4-m1 is reviewer 4's first minor point, and so on.
 
@@ -52,6 +53,83 @@ Every script honours `QUICK=1` for a reduced version, which is what `smoke`
 runs. **Run the smoke service on a new machine before starting anything
 long.** Results go to `./results` as CSV, flushed after every row, so an
 interrupted run keeps what it had and a restart skips the finished cases.
+
+## How long it all takes
+
+Measured cost per model day at one BLAS thread on a 2.8 GHz Xeon core, times
+the model days each experiment asks for. Your machine will differ; the
+*ratios* are what matters when deciding what to parallelise.
+
+| experiment | hours |
+|---|---|
+| `exp10_sponge_necessity` | **39** |
+| `exp04_regimes` | 7.0 |
+| `exp08_assimilation` | 3.9 |
+| `exp11_gallery` | 1.5 |
+| `exp01_convergence` | 1.0 |
+| `exp03_galewsky` | 0.5 |
+| `exp07_filter_protocol` | 0.4 |
+| `exp02`, `exp06` | 0.3 each |
+| `exp05`, `exp09` | seconds |
+| **total, one at a time** | **54 h** |
+
+exp10 alone is 72 % of it, and running the others alongside it does not help:
+the wall clock is whatever exp10 takes. So shard it.
+
+    for i in 0 1 2 3; do
+      SHARD_INDEX=$i SHARD_COUNT=4 docker compose run -d --name exp10-$i exp10
+    done
+
+Four shards bring exp10 to about ten hours and the whole set to roughly
+twelve. Each shard writes its own CSV; merge them when they are done:
+
+    python -c "import pandas,glob; pandas.concat([pandas.read_csv(f) \
+      for f in glob.glob('results/exp10_sponge_necessity_shard*.csv')]) \
+      .to_csv('results/exp10_sponge_necessity.csv', index=False)"
+
+Do not start more containers than the machine has physical cores. Every
+experiment reports a cost per model day, and a timing taken while the cores
+were oversubscribed compares with nothing.
+
+## Figures
+
+Two services, and the split matters.
+
+    docker compose run -d exp11      # integrates, hours, writes .npy
+    docker compose run --rm gallery  # draws, seconds, writes .pdf and .png
+
+`exp11` re-runs cases the other experiments already cover and saves the raw
+`(u, v, h)` states to `results/snapshots/`. `gallery` reads those and draws.
+Nothing is integrated while drawing, so a figure can be restyled twenty times
+for free, which is what actually happens to a figure between a draft and a
+published paper.
+
+`figures` is the other half: the line plots and tables, straight from the
+CSVs.
+
+Five field figures come out of `gallery`:
+
+| figure | what it shows |
+|---|---|
+| `fig_rotated_tc2` | the exact steady solution and the error after five days, at three rotation angles, on the sphere. The paper's central claim in one picture |
+| `fig_galewsky` | day-6 relative vorticity against the published reference |
+| `fig_regimes` | what the three forced regimes look like |
+| `fig_sponge_poles` | the north pole with the sponge and without it, **on one shared colour scale** |
+| `fig_rh_propagation` | the Rossby-Haurwitz wave travelling, against its analytic phase speed |
+
+Resolutions are overridable, because this is the one experiment whose cost is
+a choice rather than a requirement:
+
+    GALEWSKY_LMAX=64 docker compose run -d exp11   # 1 minute instead of 11
+
+The defaults are what we would submit: LMAX 128 for Galewsky, 64 for the
+rest.
+
+On the colour maps, since a reviewer looks before reading. Signed fields get
+a two-hue diverging map through a neutral grey; unsigned magnitudes get one
+hue from light to dark. Nothing is a rainbow, and the categorical colours in
+the line plots were checked for colour vision deficiency rather than chosen
+by eye.
 
 ## Constants
 

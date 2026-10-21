@@ -31,7 +31,7 @@ services:
       QUICK: "1"
       OMP_NUM_THREADS: "1"
       RESULTS_DIR: /work/results/quick
-    command: bash -c "set -e; for e in experiments/exp0*.py; do echo \"== $$e\"; python $$e; done; echo ALL QUICK EXPERIMENTS PASSED"
+    command: bash -c "set -e; for e in experiments/exp0*.py experiments/exp1*.py; do echo \"== $$e\"; python $$e; done; python figures/make_gallery.py; echo ALL QUICK EXPERIMENTS PASSED"
 
   exp01: { <<: *common, command: python experiments/exp01_convergence.py }
   exp02: { <<: *common, command: python experiments/exp02_rossby_haurwitz.py }
@@ -42,8 +42,52 @@ services:
   exp07: { <<: *common, command: python experiments/exp07_filter_protocol.py }
   exp08: { <<: *common, command: python experiments/exp08_assimilation.py }
   exp09: { <<: *common, command: python experiments/exp09_environment.py }
-  exp10: { <<: *common, command: python experiments/exp10_sponge_necessity.py }
+  # exp10 is 45 independent runs and about 39 hours in one process, which
+  # makes it the longest thing here by far. The runs do not talk to each
+  # other, so split it across cores:
+  #   for i in 0 1 2 3; do
+  #     SHARD_INDEX=$i SHARD_COUNT=4 docker compose run -d \
+  #       --name exp10-$i exp10
+  #   done
+  # Each shard writes results/exp10_sponge_necessity_shard<i>of4.csv; merge
+  # them when they finish (see the README).
+  exp10:
+    <<: *common
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      GIT_COMMIT: "${GIT_COMMIT:-}"
+      SHARD_INDEX: "${SHARD_INDEX:-0}"
+      SHARD_COUNT: "${SHARD_COUNT:-1}"
+    command: python experiments/exp10_sponge_necessity.py
 
+  # The snapshots behind the field figures. Separate from the figures service
+  # on purpose: this one integrates and is slow, that one only draws and is
+  # fast, so a figure can be restyled twenty times without re-running physics.
+  # Resolutions are overridable, e.g.
+  #   GALEWSKY_LMAX=64 docker compose run -d exp11
+  exp11:
+    <<: *common
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      GIT_COMMIT: "${GIT_COMMIT:-}"
+      TC2_LMAX: "${TC2_LMAX:-}"
+      GALEWSKY_LMAX: "${GALEWSKY_LMAX:-}"
+      REGIMES_LMAX: "${REGIMES_LMAX:-}"
+      SPONGE_LMAX: "${SPONGE_LMAX:-}"
+      RH_LMAX: "${RH_LMAX:-}"
+    command: python experiments/exp11_gallery.py
+
+  # The line and table figures, from the CSVs.
   figures:
     <<: *common
     command: python figures/make_figures.py
+
+  # The field figures, from the snapshots exp11 saved. Seconds, re-runnable
+  # as often as you like.
+  gallery:
+    <<: *common
+    command: python figures/make_gallery.py

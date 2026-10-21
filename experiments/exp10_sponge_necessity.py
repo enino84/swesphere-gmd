@@ -48,7 +48,7 @@ import time
 import numpy as np
 from swesphere import diagnostics, presets
 
-from common import DAY, QUICK, Table, log
+from common import DAY, QUICK, SHARD_COUNT, SHARD_INDEX, Table, log, shard
 
 PRESETS = ["two_jets"] if QUICK else ["waves", "one_jet", "two_jets"]
 RESOLUTIONS = [16] if QUICK else [32, 64, 96]
@@ -81,60 +81,64 @@ def run() -> None:
                 "seconds_per_day"],
         key_fields=["preset", "LMAX", "pole_rows"],
     )
-    for name in PRESETS:
-        for L in RESOLUTIONS:
-            d_lat = 180.0 / (2 * (L + 1))
-            for rows in POLE_ROWS:
-                if table.has(preset=name, LMAX=L, pole_rows=rows):
-                    log(f"skip {name} LMAX={L} rows={rows}")
-                    continue
-                log(f"{name} LMAX={L} rows={rows} "
-                    f"(sponge from {90 - rows * d_lat:.1f} deg)")
-                t0 = time.time()
-                model, x0 = presets.make(name, LMAX=L, n_pole_rows=rows)
-                inv0 = diagnostics.invariants(model, x0)
+    cases = [(name, L, rows) for name in PRESETS for L in RESOLUTIONS
+             for rows in POLE_ROWS]
+    mine = shard(cases)
+    if SHARD_COUNT > 1:
+        log(f"shard {SHARD_INDEX} of {SHARD_COUNT}: "
+            f"{len(mine)} of {len(cases)} cases")
+    for name, L, rows in mine:
+        d_lat = 180.0 / (2 * (L + 1))
+        if table.has(preset=name, LMAX=L, pole_rows=rows):
+            log(f"skip {name} LMAX={L} rows={rows}")
+            continue
+        log(f"{name} LMAX={L} rows={rows} "
+            f"(sponge from {90 - rows * d_lat:.1f} deg)")
+        t0 = time.time()
+        model, x0 = presets.make(name, LMAX=L, n_pole_rows=rows)
+        inv0 = diagnostics.invariants(model, x0)
 
-                x, t, done, survived = x0, 0.0, 0.0, True
-                step = CHECK_EVERY_DAYS * DAY
-                while done < DAYS - 1e-9:
-                    try:
-                        x = model.propagate(x, [t, t + step])
-                    except RuntimeError:
-                        survived = False
-                        break
-                    t += step
-                    done += CHECK_EVERY_DAYS
-                    if not np.isfinite(x).all():
-                        survived = False
-                        break
+        x, t, done, survived = x0, 0.0, 0.0, True
+        step = CHECK_EVERY_DAYS * DAY
+        while done < DAYS - 1e-9:
+            try:
+                x = model.propagate(x, [t, t + step])
+            except RuntimeError:
+                survived = False
+                break
+            t += step
+            done += CHECK_EVERY_DAYS
+            if not np.isfinite(x).all():
+                survived = False
+                break
 
-                elapsed = time.time() - t0
-                if survived:
-                    u, v, h = model.unpack(x)
-                    inv1 = diagnostics.invariants(model, x)
-                    k = max(1, int(round(27.3 / d_lat)))   # score poleward of 63 deg
-                    table.add(
-                        preset=name, LMAX=L, pole_rows=rows,
-                        sponge_lat_deg=round(90.0 - rows * d_lat, 2),
-                        survived=1, days_completed=done, days_requested=DAYS,
-                        umax=float(np.hypot(u, v).max()),
-                        eddy_std_h=float((h - h.mean(axis=1, keepdims=True))[k:-k].std()),
-                        polar_roughness=polar_roughness(model, x),
-                        mass_drift=abs(inv1["mass"] / inv0["mass"] - 1.0),
-                        energy_drift=abs(inv1["energy"] / inv0["energy"] - 1.0),
-                        seconds_per_day=round(elapsed / max(done, 1e-9), 2),
-                    )
-                else:
-                    log(f"  blew up after {done:g} days")
-                    table.add(
-                        preset=name, LMAX=L, pole_rows=rows,
-                        sponge_lat_deg=round(90.0 - rows * d_lat, 2),
-                        survived=0, days_completed=done, days_requested=DAYS,
-                        umax=float("nan"), eddy_std_h=float("nan"),
-                        polar_roughness=float("nan"), mass_drift=float("nan"),
-                        energy_drift=float("nan"),
-                        seconds_per_day=round(elapsed / max(done, 1e-9), 2),
-                    )
+        elapsed = time.time() - t0
+        if survived:
+            u, v, h = model.unpack(x)
+            inv1 = diagnostics.invariants(model, x)
+            k = max(1, int(round(27.3 / d_lat)))   # score poleward of 63 deg
+            table.add(
+                preset=name, LMAX=L, pole_rows=rows,
+                sponge_lat_deg=round(90.0 - rows * d_lat, 2),
+                survived=1, days_completed=done, days_requested=DAYS,
+                umax=float(np.hypot(u, v).max()),
+                eddy_std_h=float((h - h.mean(axis=1, keepdims=True))[k:-k].std()),
+                polar_roughness=polar_roughness(model, x),
+                mass_drift=abs(inv1["mass"] / inv0["mass"] - 1.0),
+                energy_drift=abs(inv1["energy"] / inv0["energy"] - 1.0),
+                seconds_per_day=round(elapsed / max(done, 1e-9), 2),
+            )
+        else:
+            log(f"  blew up after {done:g} days")
+            table.add(
+                preset=name, LMAX=L, pole_rows=rows,
+                sponge_lat_deg=round(90.0 - rows * d_lat, 2),
+                survived=0, days_completed=done, days_requested=DAYS,
+                umax=float("nan"), eddy_std_h=float("nan"),
+                polar_roughness=float("nan"), mass_drift=float("nan"),
+                energy_drift=float("nan"),
+                seconds_per_day=round(elapsed / max(done, 1e-9), 2),
+            )
     table.close()
     log("EXP-10 done ->", table.path)
 

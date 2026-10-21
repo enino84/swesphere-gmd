@@ -62,6 +62,33 @@ TC2_U0 = 2.0 * np.pi * WILLIAMSON["a"] / (12.0 * 86400.0)   # 38.611 m/s
 TC2_H0 = 2.94e4 / WILLIAMSON["g"]                            # 2998.1 m
 
 
+#: Which slice of a case list this process takes, from the environment.
+#: ``SHARD_INDEX`` in ``0 .. SHARD_COUNT-1``.
+SHARD_INDEX = int(os.environ.get("SHARD_INDEX", "0"))
+SHARD_COUNT = max(1, int(os.environ.get("SHARD_COUNT", "1")))
+
+
+def shard(cases: list) -> list:
+    """The cases this process is responsible for.
+
+    EXP-10 is 45 independent runs and about 39 hours in one process, which
+    makes the sponge decision the slowest thing in the repository by a wide
+    margin. The runs do not talk to each other, so there is no reason to do
+    them one after another on a machine with cores to spare: four shards
+    bring it to a morning.
+
+    Round robin rather than contiguous blocks, because the cases are
+    ordered by cost (resolution varies down the list) and contiguous blocks
+    would hand one process all the expensive ones.
+
+    Each shard appends to its own CSV, which `Table` already names after
+    the shard, so two processes never write the same file.
+    """
+    if SHARD_COUNT == 1:
+        return list(cases)
+    return [c for i, c in enumerate(cases) if i % SHARD_COUNT == SHARD_INDEX]
+
+
 # ----------------------------------------------------------------------
 # Incremental CSV
 # ----------------------------------------------------------------------
@@ -75,7 +102,13 @@ class Table:
 
     def __init__(self, name: str, fields: List[str], key_fields: List[str]):
         RESULTS.mkdir(parents=True, exist_ok=True)
-        self.path = RESULTS / f"{name}.csv"
+        # Per shard, so parallel processes never write the same file.
+        # Merge them afterwards with
+        #     python -c "import pandas,glob; pandas.concat(
+        #         [pandas.read_csv(f) for f in glob.glob('results/NAME*.csv')]
+        #         ).to_csv('results/NAME.csv', index=False)"
+        suffix = "" if SHARD_COUNT == 1 else f"_shard{SHARD_INDEX}of{SHARD_COUNT}"
+        self.path = RESULTS / f"{name}{suffix}.csv"
         self.fields = list(fields)
         self.key_fields = list(key_fields)
         self._done = set()
