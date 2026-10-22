@@ -54,6 +54,26 @@ runs. **Run the smoke service on a new machine before starting anything
 long.** Results go to `./results` as CSV, flushed after every row, so an
 interrupted run keeps what it had and a restart skips the finished cases.
 
+## Running everything (swesphere 0.6.0)
+
+One script, nothing to run by hand afterwards:
+
+    git pull
+    nohup ./run_all.sh > run_all.log 2>&1 & disown
+    tail -f run_all.log
+
+It rebuilds the images, removes the results that 0.6.0 invalidated, and runs
+the campaign in three stages: exp04 in four shards alongside exp06, exp07 and
+exp11; then exp05 and exp08 in eight shards, which cannot start earlier
+because exp08 draws its ensemble from exp04's records; then exp09 alone, so
+its cost measurement is not taken while seven containers compete, and the
+figures. About four to six hours on eight cores.
+
+**exp01, exp02, exp03 and exp10 are not rerun.** They pass `n_pole_rows`
+explicitly at every call, or sweep it deliberately, so the new default does
+not change their numbers; rerunning them would cost fifteen hours to
+reproduce the same CSVs.
+
 ## How long it all takes
 
 Measured cost per model day at one BLAS thread on a 2.8 GHz Xeon core, times

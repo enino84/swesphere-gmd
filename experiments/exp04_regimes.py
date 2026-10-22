@@ -29,7 +29,7 @@ import time
 import numpy as np
 from swesphere import climatology, diagnostics, presets
 
-from common import DAY, QUICK, RESULTS, Table, interior, log
+from common import DAY, QUICK, RESULTS, Table, interior, log, SHARD_COUNT, SHARD_INDEX, shard
 
 PRESETS = ["two_jets"] if QUICK else ["waves", "one_jet", "two_jets"]
 SEEDS = [0] if QUICK else [0, 1, 2]
@@ -54,48 +54,52 @@ def run() -> None:
                 "seconds"],
         key_fields=["preset", "seed", "LMAX"],
     )
-    for name in PRESETS:
-        for seed in SEEDS:
-            if table.has(preset=name, seed=seed, LMAX=LMAX):
-                log(f"skip {name} seed={seed}")
-                continue
-            log(f"{name} seed={seed} LMAX={LMAX}: spin-up {SPINUP_DAYS:g} d, "
-                f"then {N_SNAPSHOTS} states every {EVERY_DAYS:g} d")
-            t0 = time.time()
+    cases = [(n, s) for n in PRESETS for s in SEEDS]
+    mine = shard(cases)
+    if SHARD_COUNT > 1:
+        log(f"shard {SHARD_INDEX} of {SHARD_COUNT}: "
+            f"{len(mine)} of {len(cases)} records")
+    for name, seed in mine:
+        if table.has(preset=name, seed=seed, LMAX=LMAX):
+            log(f"skip {name} seed={seed}")
+            continue
+        log(f"{name} seed={seed} LMAX={LMAX}: spin-up {SPINUP_DAYS:g} d, "
+            f"then {N_SNAPSHOTS} states every {EVERY_DAYS:g} d")
+        t0 = time.time()
 
-            model, x0 = presets.make(name, LMAX=LMAX)
-            # A different start per realization. Seed 0 is the preset's own
-            # state, so one record is always the documented one.
-            if seed != 0:
-                x0 = model.initial_condition("rossby", seed=seed, perturbed=True) \
-                    if name == "waves" else \
-                    model.pack(*[f * (1.0 + 1e-3 * np.sin(seed * model.grid.LON_ns))
-                                 for f in model.unpack(x0)])
+        model, x0 = presets.make(name, LMAX=LMAX)
+        # A different start per realization. Seed 0 is the preset's own
+        # state, so one record is always the documented one.
+        if seed != 0:
+            x0 = model.initial_condition("rossby", seed=seed, perturbed=True) \
+                if name == "waves" else \
+                model.pack(*[f * (1.0 + 1e-3 * np.sin(seed * model.grid.LON_ns))
+                             for f in model.unpack(x0)])
 
-            inv0 = diagnostics.invariants(model, x0)
-            S = climatology.build_climatology(
-                model, x0, spinup_days=SPINUP_DAYS, n_snapshots=N_SNAPSHOTS,
-                every_days=EVERY_DAYS, verbose=True, label=f"{name}/{seed}")
-            inv1 = diagnostics.invariants(model, np.asarray(S[-1], dtype=float))
+        inv0 = diagnostics.invariants(model, x0)
+        S = climatology.build_climatology(
+            model, x0, spinup_days=SPINUP_DAYS, n_snapshots=N_SNAPSHOTS,
+            every_days=EVERY_DAYS, verbose=True, label=f"{name}/{seed}")
+        inv1 = diagnostics.invariants(model, np.asarray(S[-1], dtype=float))
 
-            rec = RESULTS / f"record_{name}_seed{seed}_L{LMAX}.npy"
-            np.save(rec, S)
+        rec = RESULTS / f"record_{name}_seed{seed}_L{LMAX}.npy"
+        np.save(rec, S)
 
-            eddy = np.array([eddy_std(model, np.asarray(s, dtype=float))
-                             for s in S])
-            umax = np.array([float(np.abs(np.hypot(*model.unpack(
-                np.asarray(s, dtype=float))[:2])).max()) for s in S])
+        eddy = np.array([eddy_std(model, np.asarray(s, dtype=float))
+                         for s in S])
+        umax = np.array([float(np.abs(np.hypot(*model.unpack(
+            np.asarray(s, dtype=float))[:2])).max()) for s in S])
 
-            table.add(
-                preset=name, seed=seed, LMAX=LMAX, spinup_days=SPINUP_DAYS,
-                n_snapshots=N_SNAPSHOTS, every_days=EVERY_DAYS,
-                record_days=N_SNAPSHOTS * EVERY_DAYS,
-                eddy_std_mean=float(eddy.mean()), eddy_std_sd=float(eddy.std()),
-                umax_mean=float(umax.mean()),
-                mass_drift=abs(inv1["mass"] / inv0["mass"] - 1.0),
-                energy_drift=abs(inv1["energy"] / inv0["energy"] - 1.0),
-                record_file=rec.name, seconds=round(time.time() - t0, 1),
-            )
+        table.add(
+            preset=name, seed=seed, LMAX=LMAX, spinup_days=SPINUP_DAYS,
+            n_snapshots=N_SNAPSHOTS, every_days=EVERY_DAYS,
+            record_days=N_SNAPSHOTS * EVERY_DAYS,
+            eddy_std_mean=float(eddy.mean()), eddy_std_sd=float(eddy.std()),
+            umax_mean=float(umax.mean()),
+            mass_drift=abs(inv1["mass"] / inv0["mass"] - 1.0),
+            energy_drift=abs(inv1["energy"] / inv0["energy"] - 1.0),
+            record_file=rec.name, seconds=round(time.time() - t0, 1),
+        )
     table.close()
     log("EXP-04 done ->", table.path)
 

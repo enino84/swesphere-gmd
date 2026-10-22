@@ -36,11 +36,29 @@ services:
   exp01: { <<: *common, command: python experiments/exp01_convergence.py }
   exp02: { <<: *common, command: python experiments/exp02_rossby_haurwitz.py }
   exp03: { <<: *common, command: python experiments/exp03_galewsky.py }
-  exp04: { <<: *common, command: python experiments/exp04_regimes.py }
+  exp04:
+    <<: *common
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      GIT_COMMIT: "${GIT_COMMIT:-}"
+      SHARD_INDEX: "${SHARD_INDEX:-0}"
+      SHARD_COUNT: "${SHARD_COUNT:-1}"
+    command: python experiments/exp04_regimes.py
   exp05: { <<: *common, command: python experiments/exp05_stationarity.py }
   exp06: { <<: *common, command: python experiments/exp06_stability.py }
   exp07: { <<: *common, command: python experiments/exp07_filter_protocol.py }
-  exp08: { <<: *common, command: python experiments/exp08_assimilation.py }
+  exp08:
+    <<: *common
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      GIT_COMMIT: "${GIT_COMMIT:-}"
+      SHARD_INDEX: "${SHARD_INDEX:-0}"
+      SHARD_COUNT: "${SHARD_COUNT:-1}"
+    command: python experiments/exp08_assimilation.py
   exp09: { <<: *common, command: python experiments/exp09_environment.py }
   # exp10 is 45 independent runs and about 39 hours in one process, which
   # makes it the longest thing here by far. The runs do not talk to each

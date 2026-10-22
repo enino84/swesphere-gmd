@@ -4,7 +4,10 @@
 # 0.5.0 adds the rotated test case 2, test case 6, and the settable Coriolis
 # field the rotated case needs, so the experiments run released code rather
 # than a local copy of it.
-swesphere>=0.5.0
+# 0.6.0 turns the polar sponge off by default, which EXP-10 showed is both
+# safe and necessary for the scheme to converge. Experiments that want a
+# sponge now ask for it explicitly.
+swesphere>=0.6.0
 pyteda[swe]>=0.6.0
 
 numpy>=1.24
