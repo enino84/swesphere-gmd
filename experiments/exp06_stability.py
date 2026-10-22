@@ -37,6 +37,10 @@ STEPS = [120.0, 240.0] if QUICK else [60.0, 120.0, 240.0, 360.0, 480.0,
                                       2400.0, 2880.0]
 TEST_DAYS = 0.5 if QUICK else 20.0
 REFERENCE_DT = 60.0
+#: Physical interval between filter applications, held fixed across every
+#: run here, reference included, so this measures the integrator and not a
+#: different dissipative model at each step.
+FILTER_INTERVAL_S = 360.0
 ACCURACY_THRESHOLD = 0.05        # 5% relative l2 in the interior
 LMAX = 16 if QUICK else 32
 
@@ -49,8 +53,20 @@ def run() -> None:
         key_fields=["preset", "dt"],
     )
     for name in PRESETS:
-        log(f"{name}: reference run at dt={REFERENCE_DT:g}s")
-        ref_model, x0 = presets.make(name, LMAX=LMAX, dt=REFERENCE_DT)
+        # The reference must run the SAME dissipative model as the test
+        # runs, which means the same physical filter interval, not the same
+        # filter_every. Built with the default filter_every = 3 it filtered
+        # every 180 s while every test run filtered every 360 s, so the
+        # reference was a different model and the dt = 60 s run, which is
+        # the reference's own time step, came out 3e-3 away from it instead
+        # of identical. That offset was a floor under every number in the
+        # l2_vs_reference column, and the accuracy threshold was being
+        # applied to it.
+        ref_every = max(1, int(round(FILTER_INTERVAL_S / REFERENCE_DT)))
+        log(f"{name}: reference run at dt={REFERENCE_DT:g}s, "
+            f"filter every {ref_every} steps ({FILTER_INTERVAL_S:g}s)")
+        ref_model, x0 = presets.make(name, LMAX=LMAX, dt=REFERENCE_DT,
+                                     filter_every=ref_every)
         n_ref = int(round(TEST_DAYS * DAY / REFERENCE_DT))
         x_ref = ref_model.propagate(x0, [0.0, n_ref * REFERENCE_DT])
         h_ref = interior(ref_model.unpack(x_ref)[2], ref_model.n_pole_rows)
@@ -62,7 +78,7 @@ def run() -> None:
             t0 = time.time()
             # Keep the physical filter interval fixed while dt varies, so this
             # measures the integrator and not a different dissipative model.
-            every = max(1, int(round(360.0 / dt)))
+            every = max(1, int(round(FILTER_INTERVAL_S / dt)))
             model, x0 = presets.make(name, LMAX=LMAX, dt=dt, filter_every=every)
             n = int(round(TEST_DAYS * DAY / dt))
             completed, err = True, float("nan")

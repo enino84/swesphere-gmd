@@ -66,21 +66,41 @@ def _one(name, dt, interval, sponge, block):
     model, x0 = presets.make(name, **kw)
     n = int(round(DAYS * DAY / dt))
     t0 = time.time()
-    x = model.propagate(x0, [0.0, n * dt])
+    # A configuration that blows up is a row of this table, not a crash. The
+    # filter interval has a stability limit and finding it is part of what
+    # this experiment measures: two_jets fails at a 2880 s interval, one step
+    # before the filter would first have fired, while waves survives the same
+    # interval. Letting the exception escape loses every case after it and
+    # throws away the finding.
+    try:
+        x = model.propagate(x0, [0.0, n * dt])
+    except (RuntimeError, FloatingPointError) as exc:
+        log(f"    blew up: {type(exc).__name__}")
+        return dict(preset=name, block=block, dt=dt, filter_every=every,
+                    filter_interval_s=every * dt, sponge=int(sponge),
+                    days=DAYS, completed=0, eddy_amplitude=float("nan"),
+                    seconds=round(time.time() - t0, 1))
     # Scored on a fixed number of rows whether or not the sponge is on, so the
     # sponge-off rows are comparable with the sponge-on ones.
     h = model.unpack(x)[2]
     amp = float(interior(h - h.mean(axis=1, keepdims=True), 10).std())
+    if not np.isfinite(amp):
+        log("    finished with a non-finite field")
+        return dict(preset=name, block=block, dt=dt, filter_every=every,
+                    filter_interval_s=every * dt, sponge=int(sponge),
+                    days=DAYS, completed=0, eddy_amplitude=float("nan"),
+                    seconds=round(time.time() - t0, 1))
     return dict(preset=name, block=block, dt=dt, filter_every=every,
                 filter_interval_s=every * dt, sponge=int(sponge), days=DAYS,
-                eddy_amplitude=amp, seconds=round(time.time() - t0, 1))
+                completed=1, eddy_amplitude=amp,
+                seconds=round(time.time() - t0, 1))
 
 
 def run() -> None:
     table = Table(
         "exp07_filter_protocol",
         fields=["preset", "block", "dt", "filter_every", "filter_interval_s",
-                "sponge", "days", "eddy_amplitude", "seconds"],
+                "sponge", "days", "completed", "eddy_amplitude", "seconds"],
         key_fields=["preset", "block", "dt", "filter_interval_s", "sponge"],
     )
     for name in PRESETS:
