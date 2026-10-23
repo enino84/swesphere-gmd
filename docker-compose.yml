@@ -59,6 +59,17 @@ services:
       SHARD_INDEX: "${SHARD_INDEX:-0}"
       SHARD_COUNT: "${SHARD_COUNT:-1}"
     command: python experiments/exp08_assimilation.py
+  exp12:
+    <<: *common
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      GIT_COMMIT: "${GIT_COMMIT:-}"
+      SHARD_INDEX: "${SHARD_INDEX:-0}"
+      SHARD_COUNT: "${SHARD_COUNT:-1}"
+    command: python experiments/exp12_predictability.py
+  exp13: { <<: *common, command: python experiments/exp13_polar_stencil.py }
   exp09: { <<: *common, command: python experiments/exp09_environment.py }
   # exp10 is 45 independent runs and about 39 hours in one process, which
   # makes it the longest thing here by far. The runs do not talk to each

@@ -69,21 +69,23 @@ docker compose run --rm -T --entrypoint sh exp09 -c '
   cd /work/results || exit 0
   rm -f exp04_regimes*.csv exp05_*.csv exp06_stability*.csv \
         exp07_filter_protocol*.csv exp08_assimilation*.csv exp09_timing*.csv \
-        exp11_gallery*.csv record_*.npy
+        exp11_gallery*.csv exp12_predictability*.csv \
+        exp13_polar_stencil*.csv record_*.npy
   rm -rf snapshots
   echo "queda:"; ls -1 *.csv 2>/dev/null | sed "s/^/    /"
 '
 
-say "STAGE A: exp04 x$SHARDS_A, exp06, exp07, exp11"
+say "STAGE A: exp04 x$SHARDS_A, exp06, exp07, exp11, exp13"
 for i in $(seq 0 $((SHARDS_A - 1))); do
     run_shard "exp04-$i" exp04 "$i" "$SHARDS_A"
 done
 run_bg exp06 exp06
 run_bg exp07 exp07
 run_bg exp11 exp11
+run_bg exp13 exp13
 sleep 20; docker ps --format '{{.Names}}\t{{.Status}}' | grep -E '^exp'
 
-wait_for exp04; wait_for exp06; wait_for exp07; wait_for exp11
+wait_for exp04; wait_for exp06; wait_for exp07; wait_for exp11; wait_for exp13
 say "STAGE A terminada"
 ls -la results/record_*.npy 2>/dev/null | wc -l | xargs echo "  registros escritos:"
 
@@ -99,13 +101,16 @@ else:
     print('exp04: una sola particion, nada que unir')
 "
 
-say "STAGE B: exp05, despues exp08 x$SHARDS_B"
+say "STAGE B: exp05, despues exp08 x$SHARDS_B y exp12"
 docker compose run --rm -T exp05
 for i in $(seq 0 $((SHARDS_B - 1))); do
     run_shard "exp08-$i" exp08 "$i" "$SHARDS_B"
 done
+# exp12 reads the same records and costs minutes, so it rides along here
+# instead of getting a stage of its own.
+run_bg exp12 exp12
 sleep 20; docker ps --format '{{.Names}}\t{{.Status}}' | grep -E '^exp'
-wait_for exp08
+wait_for exp08; wait_for exp12
 say "STAGE B terminada"
 
 docker compose run --rm -T --entrypoint python exp09 -c "
