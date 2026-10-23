@@ -58,18 +58,11 @@ def eddy_amplitude(model, x: np.ndarray) -> float:
                           model.n_pole_rows).std())
 
 
-#: Rows the sponge covers when this experiment asks for one. Written out
-#: rather than left to the model's default, which was 10 up to swesphere
-#: 0.5.0 and is 0 from 0.6.0: relying on it made blocks A and B of this
-#: experiment identical the moment the default changed, and identical in a
-#: way that produced plausible numbers rather than an error.
-SPONGE_ON_ROWS = 10
-
-
 def _one(name, dt, interval, sponge, block):
     every = max(1, int(round(interval / dt)))
-    kw = dict(LMAX=LMAX, dt=dt, filter_every=every,
-              n_pole_rows=SPONGE_ON_ROWS if sponge else 0)
+    kw = dict(LMAX=LMAX, dt=dt, filter_every=every)
+    if not sponge:
+        kw["n_pole_rows"] = 0
     model, x0 = presets.make(name, **kw)
     n = int(round(DAYS * DAY / dt))
     t0 = time.time()
