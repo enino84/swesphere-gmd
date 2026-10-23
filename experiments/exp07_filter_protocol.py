@@ -21,9 +21,15 @@ The protocol this experiment defines and measures, in three blocks:
      without the polar sponge, which isolates how much of block A's residual
      the sponge is responsible for. This is the measurement the manuscript
      did not have.
-  C. **step fixed, filter interval varies.** The dissipative model changes
-     and the integrator does not, which is the dependence the manuscript
-     reported.
+  C. **step fixed, filter interval varies, sponge on.** The dissipative
+     model changes and the integrator does not, which is the dependence the
+     manuscript reported.
+  D. **step fixed, filter interval varies, sponge off.** Block C with the
+     sponge removed. It was added after the first run, because C on its own
+     cannot answer what the filter cadence does: with the sponge on, the two
+     dissipations vary together and the block measures their sum. D is the
+     one a user of version 0.6.0 should read, since 0.6.0 ships with no
+     sponge.
 
 A comparison of two integrators is fair only within a block. Reporting the
 three together is what lets a reader see which effect dominates.
@@ -58,11 +64,18 @@ def eddy_amplitude(model, x: np.ndarray) -> float:
                           model.n_pole_rows).std())
 
 
+#: Rows the sponge covers when this experiment asks for one. Written out
+#: rather than left to the model's default, which was 10 up to swesphere
+#: 0.5.0 and is 0 from 0.6.0: relying on it made blocks A and B of this
+#: experiment identical the moment the default changed, and identical in a
+#: way that produced plausible numbers rather than an error.
+SPONGE_ON_ROWS = 10
+
+
 def _one(name, dt, interval, sponge, block):
     every = max(1, int(round(interval / dt)))
-    kw = dict(LMAX=LMAX, dt=dt, filter_every=every)
-    if not sponge:
-        kw["n_pole_rows"] = 0
+    kw = dict(LMAX=LMAX, dt=dt, filter_every=every,
+              n_pole_rows=SPONGE_ON_ROWS if sponge else 0)
     model, x0 = presets.make(name, **kw)
     n = int(round(DAYS * DAY / dt))
     t0 = time.time()
@@ -117,8 +130,13 @@ def run() -> None:
         for iv in INTERVALS_C:                   # C: interval varies
             if not table.has(preset=name, block="C", dt=FIXED_STEP,
                              filter_interval_s=iv, sponge=1):
-                log(f"C {name} dt={FIXED_STEP:g} interval={iv:g}")
+                log(f"C {name} dt={FIXED_STEP:g} interval={iv:g} sponge=on")
                 table.add(**_one(name, FIXED_STEP, iv, True, "C"))
+        for iv in INTERVALS_C:                   # D: C without the sponge
+            if not table.has(preset=name, block="D", dt=FIXED_STEP,
+                             filter_interval_s=iv, sponge=0):
+                log(f"D {name} dt={FIXED_STEP:g} interval={iv:g} sponge=off")
+                table.add(**_one(name, FIXED_STEP, iv, False, "D"))
     table.close()
     log("EXP-07 done ->", table.path)
 
