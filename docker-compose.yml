@@ -115,6 +115,13 @@ services:
     <<: *common
     command: python figures/make_figures.py
 
+  # The measurement figures for Sects. 6 and 7: assimilation, autocorrelation,
+  # error growth, and the three variables of one state. Reads CSVs and
+  # snapshots, integrates nothing, so it is cheap to re-run after a restyle.
+  figures2:
+    <<: *common
+    command: python figures/make_figures2.py
+
   # The field figures, from the snapshots exp11 saved. Seconds, re-runnable
   # as often as you like.
   gallery:

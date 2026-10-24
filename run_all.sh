@@ -126,6 +126,7 @@ say "STAGE C: exp09 con la maquina vacia, despues las figuras"
 docker compose run --rm -T exp09
 docker compose run --rm -T gallery
 docker compose run --rm -T figures
+docker compose run --rm -T figures2
 
 say "RESUMEN"
 docker compose run --rm -T --entrypoint python exp09 -c "

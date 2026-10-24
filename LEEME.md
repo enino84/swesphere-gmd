@@ -162,3 +162,43 @@ GIT_COMMIT=$(git rev-parse --short HEAD) python experiments/exp13_polar_stencil.
 No toca el paquete. El estencil alternativo vive aquí, en el repositorio de
 experimentos, porque se probó y se descartó, y una opción publicada existe
 para usarse.
+
+---
+
+# figures2, nuevo: las cuatro figuras que miden algo
+
+`make_gallery.py` dibuja cómo se ven los flujos. `make_figures2.py` dibuja lo
+que se midió sobre ellos, para las tres secciones cuyos resultados más
+fuertes vivían solo en tablas.
+
+1. **fig_assimilation**, tres paneles desde `exp08_assimilation.csv`: error de
+   fondo en altura, en viento, y la dispersión del conjunto dividida por el
+   error que debería representar. La sección 7 no tenía ni una figura y es la
+   que responde la objeción central del revisor 2.
+2. **fig_autocorrelation**, desde los registros de exp04: la autocorrelación
+   de la amplitud de remolinos contra la del viento máximo, medidas sobre los
+   mismos registros de 800 días, con el tau integrado marcado. El contraste de
+   treinta veces entre las dos se ve de un vistazo.
+3. **fig_predictability**, desde `exp12_predictability.csv`: separación contra
+   plazo, y la saturación de la amplitud más grande.
+4. **fig_multivariate**, desde la instantánea `regime_two_jets_f0`: las tres
+   variables pronósticas de un mismo estado. Es la figura del argumento de por
+   qué esto no es Lorenz 96.
+
+No integra nada. Lee CSV e instantáneas, así que re-dibujar cuesta segundos.
+Si falta una entrada, esa figura se salta con un mensaje y las demás salen.
+
+El estimador de autocorrelación y los ayudantes de dibujo se **importan**, no
+se copian. El tau que anota la figura 2 tiene que ser el mismo número que
+`exp05_stationarity.csv`, y la única forma de garantizarlo es llamar a la
+misma función.
+
+Está en la etapa C de `run_all.sh`, al lado de `gallery` y `figures`.
+
+Suelto:
+
+```bash
+cd /mnt/data/swesphere-gmd
+docker compose build figures2
+docker compose run --rm -T figures2
+```
