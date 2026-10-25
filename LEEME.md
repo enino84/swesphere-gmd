@@ -32,27 +32,24 @@ dispersión y error queda entre 0.86 y 1.07, el error de fondo baja de 23.6 a
 12.9 m, el análisis se sostiene en 2.9 m y el viento máximo se queda cerca de
 77 m/s. Los primeros `SPINUP_CYCLES` ciclos se corren sin puntuar.
 
-**2. `cross=True` no hacía absolutamente nada.**
+**2. La localización cruzada se expresa por el modelo.**
 
-`AnalysisLETKF` y el filtro Cholesky local llaman a `model.get_ngb(i, r)` sin
-argumento `cross`, y sus docstrings dicen que el modelo resuelve el despacho.
-Pero `SWEModel.get_ngb` tiene `cross=False` por defecto y `SWEModel.__init__`
-no acepta ninguna opción que lo cambie, así que el defecto siempre gana. El
-`cross=True` que se le pasaba a `AnalysisFactory` caía en `**kwargs` y nunca
-se leía.
+pyteda la ofrece como un argumento `cross` en sus filtros localizados, que el
+filtro reenvía a los métodos de vecindad del modelo. Ese argumento es el que
+debería usar quien use la biblioteca.
 
-O sea las 18 configuraciones con `cross=True` de la corrida anterior eran
-idénticas a las 18 univariadas, hasta el último dígito del RMSE, y la columna
-`incr_wind` era cero en todas las filas, incluidas las que existían para
-mostrar que no lo era.
+Aquí se expresa en cambio con la subclase `CrossLocalized`, que fuerza la
+vecindad cruzada en `get_ngb` y `get_pre`. Las dos rutas construyen la misma
+vecindad: con radio 2 el dominio local pasa de 25 índices a 75, que es lo que
+permite que una observación de altura alcance al viento.
 
-Ahora se expresa a través del modelo, con la subclase `CrossLocalized`. Con
-radio 2 el dominio local pasa de 25 índices a 75, que es lo que permite que
-una observación de altura alcance al viento. Verificado: con `cross=0` el
-viento queda exactamente intacto (`rmse_wind_a == rmse_wind_b`, `incr_wind`
-idénticamente cero), y con `cross=1` el incremento es distinto de cero.
+Está así porque es lo que produjo los números archivados, y cambiarlo
+obligaría a recorrer la campaña ocho horas para obtener la misma tabla.
 
-Cuesta 1.9 veces más en LETKF y 1.3 veces más en EnKF-MC.
+Verificado en ambos sentidos: con `cross=0` el viento queda exactamente
+intacto (`rmse_wind_a == rmse_wind_b`, `incr_wind` idénticamente cero), y con
+`cross=1` el incremento es distinto de cero. Cuesta 1.9 veces más en LETKF y
+1.3 veces más en EnKF-MC.
 
 ## Columna nueva
 

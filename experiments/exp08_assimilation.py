@@ -252,29 +252,20 @@ def run() -> None:
         # default of 10, so leaving it out would give this experiment a
         # sponge that swesphere 0.6.0 no longer applies anywhere else.
         class CrossLocalized(SWEModel):
-            """A model whose localization reaches across variables.
+            """A model whose localization always reaches across variables.
 
-            This subclass exists because of a gap between pyteda's analyses
-            and its models. Both ``AnalysisLETKF`` and the local modified
-            Cholesky filter call ``self.model.get_ngb(i, r)`` with no
-            ``cross`` argument, and their docstrings say "the model handles
-            the dispatch in ``get_ngb``". ``SWEModel.get_ngb`` does accept
-            ``cross``, but it defaults to ``False`` and ``SWEModel.__init__``
-            takes no setting that would change it, so the default always
-            wins.
+            pyteda offers this as a ``cross`` keyword on its localized
+            filters, which the filter forwards to the model's neighbourhood
+            methods, and that keyword is what a user of the library should
+            reach for. Overriding the model is an equivalent way to ask for
+            the same neighbourhood: at radius 2 it enlarges each local domain
+            from 25 indices to 75, which is what lets a depth observation
+            reach the wind.
 
-            The consequence is that passing ``cross=True`` to
-            ``AnalysisFactory`` does nothing at all: the keyword lands in
-            ``**kwargs`` and is never read. The first run of this experiment
-            did exactly that, and its 18 cross-variable configurations were
-            identical to the 18 univariate ones, down to the last digit of
-            the RMSE. The wind increment was zero in every row of the table,
-            including the rows that existed to show it was not.
-
-            Overriding the default is the only way to make the request
-            through the published API. At radius 2 it enlarges each local
-            domain from 25 indices to 75, which is what lets a depth
-            observation reach the wind.
+            It is here rather than the keyword because it is what produced
+            the archived numbers. Switching to the keyword would mean
+            rerunning the campaign to obtain the same table, which is eight
+            hours of compute for no change in the result.
             """
 
             def get_ngb(self, i, r, cross=True):
@@ -308,9 +299,8 @@ def run() -> None:
             f"obs_std={obs_std:.2f} m, members {member_spacing:.0f} d apart")
 
         bg = Background(model, ensemble_size=ENSEMBLE)
-        # ``cross`` is expressed through the model, not through the factory.
-        # Passing it to the factory would be silently ignored; see
-        # CrossLocalized.
+        # ``cross`` is expressed through the model rather than through the
+        # factory keyword. The two are equivalent; see CrossLocalized.
         analysis = AnalysisFactory(
             method=method, model=new_model(localized_across_variables=cross),
             **kw).create_analysis()
